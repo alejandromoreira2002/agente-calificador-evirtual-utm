@@ -41,6 +41,19 @@ function fmtDue(ts) {
   return new Date(ts * 1000).toLocaleDateString("es-EC", { year: "numeric", month: "short", day: "numeric" });
 }
 
+function fmtNum(n) {
+  const v = Number(n);
+  if (!isFinite(v)) return "—";
+  return v.toLocaleString("es-EC", { maximumFractionDigits: 2 });
+}
+
+function fmtFecha(ts) {
+  if (!ts) return "";
+  return new Date(ts * 1000).toLocaleString("es-EC", {
+    day: "numeric", month: "short", year: "numeric", hour: "2-digit", minute: "2-digit",
+  });
+}
+
 // ─────────────── Inicio ───────────────
 
 async function init() {
@@ -173,6 +186,7 @@ async function selectAssignment(aid) {
       sl.innerHTML = '<p class="muted">No hay entregas de estudiantes.</p>';
       $("#grade-btn").disabled = true;
     } else {
+      const maxTarea = detail.grade;
       sl.innerHTML = `
         <div class="students-head">
           <label><input type="checkbox" id="sel-all-students" checked> <strong>Seleccionar todos</strong></label>
@@ -180,16 +194,27 @@ async function selectAssignment(aid) {
         </div>
         <div class="students-list">` +
         subs.map((s) => `
-          <label class="student-row">
-            <input type="checkbox" class="sel-student" value="${s.userid}" checked>
-            <span class="s-name">${esc(s.fullname)}</span>
-            <span class="files">${s.files.map(esc).join(", ") || "sin archivos"}</span>
-          </label>`).join("") + `</div>`;
+          <div class="student-item">
+            <div class="student-row" data-uid="${s.userid}">
+              <label class="student-pick">
+                <input type="checkbox" class="sel-student" value="${s.userid}" checked>
+                <span class="s-name">${esc(s.fullname)}</span>
+              </label>
+              <span class="files">${s.files.map(esc).join(", ") || "sin archivos"}</span>
+              ${s.graded
+                ? `<span class="grade-badge" title="Nota ya registrada en Moodle">✓ ${fmtNum(s.grade)} / ${fmtNum(s.max_grade ?? maxTarea)}</span>
+                   <button type="button" class="mini detail-btn" data-uid="${s.userid}">Ver detalle</button>`
+                : ""}
+            </div>
+            <div class="grade-detail hidden" id="detail-${s.userid}"></div>
+          </div>`).join("") + `</div>`;
       $("#sel-all-students").addEventListener("change", (e) => {
         $$(".sel-student").forEach((cb) => { cb.checked = e.target.checked; });
         updateStudentCount();
       });
       $$(".sel-student").forEach((cb) => cb.addEventListener("change", updateStudentCount));
+      $$(".detail-btn").forEach((b) =>
+        b.addEventListener("click", () => toggleGradeDetail(+b.dataset.uid, b)));
       updateStudentCount();
     }
     updateRubricPicker();
@@ -445,6 +470,74 @@ function selectedStudentIds() {
   return [...$$(".sel-student:checked")].map((cb) => +cb.value);
 }
 
+// ─────────────── Detalle de una nota ya registrada ───────────────
+
+async function toggleGradeDetail(uid, btn) {
+  const caja = $("#detail-" + uid);
+  if (!caja) return;
+
+  if (!caja.classList.contains("hidden")) {     // ya estaba abierto → cerrar
+    caja.classList.add("hidden");
+    caja.innerHTML = "";
+    btn.textContent = "Ver detalle";
+    return;
+  }
+
+  btn.disabled = true;
+  caja.classList.remove("hidden");
+  caja.innerHTML = '<span class="spinner"></span> Cargando el detalle…';
+  try {
+    const d = await api(`/api/assignments/${state.assignment.id}/submissions/${uid}/grade`);
+    const quien = d.graded_by_me ? "Calificado por ti" : "Calificado";
+    const fecha = fmtFecha(d.graded_date);
+    const comentario = (d.feedback || "").trim();
+    caja.innerHTML = `
+      <div class="detail-head">
+        <span><strong>Nota registrada en Moodle:</strong> ${esc(d.gradefordisplay || fmtNum(d.grade))}</span>
+        <span class="muted small">${quien}${fecha ? " · " + fecha : ""}</span>
+      </div>
+      <div class="detail-body">
+        ${comentario
+          ? `<p><strong>Retroalimentación:</strong></p><p>${esc(comentario).replace(/\n/g, "<br>")}</p>`
+          : '<p class="muted">Sin retroalimentación escrita en Moodle.</p>'}
+      </div>`;
+    btn.textContent = "Ocultar detalle";
+  } catch (e) {
+    caja.innerHTML = `<span class="err-text">No se pudo cargar el detalle: ${esc(e.message)}</span>`;
+    btn.textContent = "Ver detalle";
+  } finally {
+    btn.disabled = false;
+  }
+}
+
+// Refresca el badge de nota de un estudiante (por ejemplo, justo después de publicar)
+function marcarCalificado(uid, grade, maxGrade) {
+  const fila = document.querySelector(`.student-row[data-uid="${uid}"]`);
+  if (!fila) return;
+
+  let badge = fila.querySelector(".grade-badge");
+  if (!badge) {
+    badge = document.createElement("span");
+    badge.className = "grade-badge";
+    badge.title = "Nota ya registrada en Moodle";
+    fila.appendChild(badge);
+  }
+  badge.textContent = `✓ ${fmtNum(grade)} / ${fmtNum(maxGrade)}`;
+
+  if (!fila.querySelector(".detail-btn")) {
+    const b = document.createElement("button");
+    b.type = "button";
+    b.className = "mini detail-btn";
+    b.dataset.uid = uid;
+    b.textContent = "Ver detalle";
+    b.addEventListener("click", () => toggleGradeDetail(uid, b));
+    fila.appendChild(b);
+  }
+  // El detalle que hubiera cargado quedó obsoleto: se limpia para que se recargue
+  const caja = $("#detail-" + uid);
+  if (caja) { caja.innerHTML = ""; caja.classList.add("hidden"); }
+}
+
 // ─────────────── Calificación (agente) ───────────────
 
 async function grade() {
@@ -611,6 +704,14 @@ async function publish() {
     });
     const ok = results.filter((r) => r.ok).length;
     const fail = results.filter((r) => !r.ok).length;
+    // Actualiza al instante el badge de los estudiantes que se acaban de publicar
+    for (const r of results) {
+      if (!r.ok) continue;
+      const enviada = grades.find((g) => g.userid === r.userid);
+      const previa = (state.preview || []).find((p) => p.userid === r.userid);
+      marcarCalificado(r.userid, enviada ? enviada.grade : null,
+                       previa ? previa.max_grade : state.assignment.grade);
+    }
     toast(`Publicado: ${ok} ok, ${fail} con error.`, fail ? "err" : "ok");
     if (fail) {
       const errs = results.filter((r) => !r.ok).map((r) => r.error).join("; ");

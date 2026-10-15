@@ -23,7 +23,7 @@ Pensada para docentes que **no tienen acceso de administrador** al Moodle instit
 - Gestión de rúbricas desde la interfaz: crear, editar, borrar e **importar desde Excel/CSV**.
 
 **Control antes de publicar**
-- **Previsualización** con nota, criterios evaluados, justificación y retroalimentación sugerida.
+- **Previsualización** con nota, criterios evaluados, justificación y retroalimentación sugerida que **incluye el desglose por criterio** (qué obtuvo en cada uno y por qué).
 - Edición manual de la nota y del comentario.
 - Descarga de las entregas originales para revisarlas.
 - **Publicación selectiva**: elige qué estudiantes se registran en Moodle.

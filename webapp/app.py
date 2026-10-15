@@ -260,19 +260,40 @@ def submissions(aid):
         return jsonify({"error": str(subs)}), 502
     enrolled = {u["id"]: u.get("fullname", u.get("username"))
                 for u in api.get_enrolled(detail["courseid"])}
+    # Notas ya registradas en Moodle (una sola llamada para toda la tarea).
+    registradas = api.get_grades(aid)
     teacher_id = session.get("userid")
     out = []
     for s in subs:
         uid = s.get("userid")
         if uid == teacher_id:
             continue
+        g = registradas.get(uid) or {}
         out.append({
             "userid": uid,
             "fullname": enrolled.get(uid, f"userid {uid}"),
             "status": s.get("status"),
             "files": [f["name"] for f in api.submission_files(s)],
+            "graded": bool(g),
+            "grade": g.get("grade"),
+            "max_grade": detail.get("grade"),
+            "graded_by": enrolled.get(g.get("grader"), ""),
+            "graded_by_me": g.get("grader") == teacher_id,
+            "graded_date": g.get("timemodified"),
         })
     return jsonify(out)
+
+
+@app.route("/api/assignments/<int:aid>/submissions/<int:userid>/grade")
+def submission_grade(aid, userid):
+    """Detalle de la calificación ya registrada en Moodle para un estudiante."""
+    d = api.grade_detail(aid, userid)
+    if not d:
+        return jsonify({"error": "Sin calificación registrada en Moodle"}), 404
+    d["feedback"] = strip_html(d.get("feedback") or "")
+    d["gradefordisplay"] = strip_html(d.get("gradefordisplay") or "")
+    d["graded_by_me"] = d.get("grader") == session.get("userid")
+    return jsonify(d)
 
 
 @app.route("/api/assignments/<int:aid>/submissions/<int:userid>/files/<path:filename>")

@@ -125,14 +125,24 @@ button.primary:disabled { opacity: .5; cursor: not-allowed; }
 .students-list { display: flex; flex-direction: column; gap: 6px; }
 .students-head { display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px; font-size: 13px; }
 .students-head label { display: flex; align-items: center; gap: 6px; cursor: pointer; }
-.student-row {
-  display: flex; align-items: center; gap: 10px; padding: 8px 10px;
-  border: 1px solid var(--border); border-radius: 8px; cursor: pointer;
-}
-.student-row:hover { background: #f8fafd; }
-.student-row .s-name { flex: 1; }
+
+.student-item { border: 1px solid var(--border); border-radius: 8px; overflow: hidden; }
+.student-row { display: flex; align-items: center; gap: 10px; padding: 8px 10px; }
+.student-item:hover { background: #f8fafd; }
+.student-pick { display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0; cursor: pointer; }
+.student-row .s-name { flex: 1; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
 .student-row .files { color: var(--muted); font-size: 12px; text-align: right; }
 .student-row input[type=checkbox] { width: 16px; height: 16px; cursor: pointer; }
+
+/* Nota ya registrada en Moodle + detalle */
+.grade-badge {
+  background: #dcfce7; color: #15803d; border: 1px solid #bbf7d0;
+  font-size: 12px; font-weight: 600; padding: 2px 8px; border-radius: 999px; white-space: nowrap;
+}
+.detail-btn { white-space: nowrap; }
+.grade-detail { padding: 10px 12px; border-top: 1px dashed var(--border); background: #fbfcfe; font-size: 13px; }
+.grade-detail .detail-head { display: flex; justify-content: space-between; gap: 10px; flex-wrap: wrap; margin-bottom: 6px; }
+.grade-detail .detail-body p { margin: 4px 0; }
 
 table.grades { width: 100%; border-collapse: collapse; font-size: 14px; }
 table.grades th, table.grades td { text-align: left; padding: 10px 12px; border-bottom: 1px solid var(--border); vertical-align: top; }

@@ -174,7 +174,7 @@ El navegador consulta `/api/jobs/<id>` cada 1,5 s y pinta el avance en vivo: `El
 
 ## 4. Componentes en detalle
 
-### 4.1 `api.py` — capa de acceso a Moodle (215 líneas)
+### 4.1 `api.py` — capa de acceso a Moodle (287 líneas)
 
 Toda la comunicación con Moodle pasa por aquí. No sabe nada de IA ni de interfaz.
 
@@ -194,7 +194,7 @@ Esto es lo que permite que **varios docentes usen la misma instancia** sin pisar
 
 **Descarga de archivos.** `download()` añade el token a la URL del archivo y lo baja con un User-Agent propio.
 
-### 4.2 `grader.py` — motor de calificación (428 líneas)
+### 4.2 `grader.py` — motor de calificación (467 líneas)
 
 Es el corazón del sistema. Se divide en tres responsabilidades:
 
@@ -233,6 +233,17 @@ nota = (puntos obtenidos / puntos totales de la rúbrica) × nota máxima de la 
 nota = min(max(nota, 0), nota_máxima)     # topes
 ```
 
+4. **Composición de la retroalimentación** (`detalle_criterios`): al comentario general que redacta el modelo se le añade, **en Python**, el desglose de cada criterio con su nivel, su puntaje y el porqué:
+
+```
+Detalle por criterio:
+• 1. Introducción — Excelente (0,3/0,3): Delimita el ámbito con precisión…
+• 2. Aplicaciones — Satisfactorio (0,4/0,8): Solo presenta dos ejemplos…
+Nota final: 2,75 / 3
+```
+
+El desglose se compone en código y **no** se le pide al modelo, para que el número que ve el estudiante sea exactamente el mismo que el que se registra en Moodle. Ese texto llega precargado al área editable de la previsualización, así que el docente puede ajustarlo o recortarlo antes de publicar.
+
 #### c) Orquestación por lotes (`grade_submissions`)
 
 Recorre los estudiantes, llama a `grade_one`, acumula resultados, notifica el progreso y **aísla los fallos**: si un estudiante falla, se marca con `status: "error"` y el bucle continúa. Después reintenta los fallidos.
@@ -245,7 +256,7 @@ Aquí se concentran los problemas reales encontrados en producción:
 - **Reintentos** con espera progresiva, y **detección de respuesta vacía** (el modelo a veces gasta los tokens "razonando" y devuelve `content` vacío).
 - **`max_tokens`** acotado para evitar respuestas desbordadas.
 
-### 4.3 `app.py` — servidor web (594 líneas)
+### 4.3 `app.py` — servidor web (644 líneas)
 
 Es la capa de orquestación: expone la API interna, gestiona sesiones y coordina los trabajos.
 
@@ -279,7 +290,7 @@ Estructura de un trabajo:
 
 **Parser de Excel.** Convierte una hoja de cálculo en una rúbrica. Detecta automáticamente el formato (simple o por niveles) y la fila de encabezados, ignorando acentos y mayúsculas en los nombres de columna. Si no encuentra encabezados, devuelve un error explícito en lugar de generar una rúbrica basura.
 
-### 4.4 Frontend (`app.js` 663 · `style.css` 299 · `index.html` 158)
+### 4.4 Frontend (`app.js` 787 · `style.css` 324 · `index.html` 173)
 
 JavaScript vanilla, sin frameworks. Patrón general:
 
@@ -466,7 +477,7 @@ Cada entrega supone **una llamada** al modelo con, aproximadamente, la consigna 
   "grade": 2.95,
   "max_grade": 3.0,
   "summary": "justificación general de la nota",
-  "feedback": "retroalimentación para el estudiante"
+  "feedback": "texto general del agente + bloque «Detalle por criterio» (esto es lo que se publica)"
 }
 ```
 
@@ -505,7 +516,7 @@ Esta sección documenta los problemas reales encontrados durante el desarrollo. 
 - **Los archivos van a caché, no a memoria.** Permite reparar y revisar una corrección sin volver a descargar.
 - **Una sola llamada para los contadores de todas las tareas de un curso**, en lugar de una por tarea.
 - **Sin base de datos.** Copiar la carpeta es toda la migración.
-- **El comentario del agente no se publica automáticamente.** El docente edita y decide qué texto va a Moodle.
+- **La retroalimentación pasa siempre por el docente.** El agente redacta el comentario general y añade el desglose por criterio; ese texto llega a un área editable y **solo se escribe en Moodle si el docente lo aprueba** para cada estudiante.
 
 ---
 
@@ -536,7 +547,7 @@ Por defecto la app escucha en `0.0.0.0` para permitir el acceso desde el aula. *
 
 ```
 .
-├── api.py                       215 líneas  · Cliente de la API REST de Moodle
+├── api.py                       287 líneas  · Cliente de la API REST de Moodle
 ├── config.json                              · URL del sitio (alternativa a MOODLE_SITE)
 ├── .env                                     · Credenciales ⚠️ NO se versiona
 ├── .env.example                             · Plantilla de credenciales
@@ -546,17 +557,17 @@ Por defecto la app escucha en `0.0.0.0` para permitir el acceso desde el aula. *
 ├── README.md                                · Guía de instalación y uso
 ├── DOCUMENTACION.md                         · Este documento
 └── webapp/
-    ├── app.py                   594 líneas  · Backend Flask: endpoints, trabajos, rúbricas
-    ├── grader.py                428 líneas  · Motor: extracción de texto + LLM + notas
+    ├── app.py                   644 líneas  · Backend Flask: endpoints, trabajos, rúbricas
+    ├── grader.py                467 líneas  · Motor: extracción de texto + LLM + notas
     ├── run.sh                               · Lanzador Linux/macOS
     ├── run.bat                              · Lanzador Windows
     ├── requirements.txt                     · flask · requests · pymupdf · python-docx · openpyxl
     ├── SETUP_WINDOWS.md                     · Guía detallada para Windows
     ├── README.md                            · Nota sobre esta carpeta
     ├── rubrics/                             · Rúbricas en JSON
-    ├── static/app.js            663 líneas  · Lógica de la interfaz
-    ├── static/style.css         299 líneas  · Estilos
-    ├── templates/index.html     158 líneas  · Estructura de la interfaz
+    ├── static/app.js            787 líneas  · Lógica de la interfaz
+    ├── static/style.css         324 líneas  · Estilos
+    ├── templates/index.html     173 líneas  · Estructura de la interfaz
     ├── cache/                               · Entregas descargadas ⚠️ NO se versiona
     └── venv/                                · Entorno virtual ⚠️ NO se versiona
 ```

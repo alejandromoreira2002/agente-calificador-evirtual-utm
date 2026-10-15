@@ -3,8 +3,20 @@
   "name": "Genérica (cumplimiento)",
   "description": "Rúbrica básica de tres criterios para cualquier tarea.",
   "criteria": [
-    {"name": "Cumplimiento total de la consigna", "description": "¿Se completó todo lo solicitado?", "max_points": 5},
-    {"name": "Calidad del contenido", "description": "¿El contenido es correcto y relevante?", "max_points": 3},
-    {"name": "Presentación", "description": "¿Formato, organización y claridad?", "max_points": 2}
+    {
+      "name": "Cumplimiento total de la consigna",
+      "max_points": 5.0,
+      "description": "¿Se completó todo lo solicitado?"
+    },
+    {
+      "name": "Calidad del contenido",
+      "max_points": 3.0,
+      "description": "¿El contenido es correcto y relevante?"
+    },
+    {
+      "name": "Presentación",
+      "max_points": 2.0,
+      "description": "¿Formato, organización y claridad?"
+    }
   ]
 }

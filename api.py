@@ -201,6 +201,58 @@ def save_grade(assignid, userid, grade, feedback):
     )
 
 
+def get_grades(assignid):
+    """Notas ya registradas en Moodle para una tarea: {userid: {grade, grader, timemodified}}.
+
+    Una sola llamada para toda la tarea.
+    """
+    d = call("mod_assign_get_grades", assignmentids=[assignid])
+    if isinstance(d, dict) and "exception" in d:
+        return {}
+    out = {}
+    for asg in d.get("assignments", []):
+        if asg.get("assignmentid") != assignid:
+            continue
+        for g in asg.get("grades", []):
+            try:
+                out[g["userid"]] = {
+                    "grade": float(g.get("grade") or 0),
+                    "grader": g.get("grader"),
+                    "timemodified": g.get("timemodified"),
+                }
+            except (TypeError, ValueError, KeyError):
+                continue
+    return out
+
+
+def grade_detail(assignid, userid):
+    """Detalle de la calificación registrada: nota, quién y cuándo, y el comentario."""
+    d = call("mod_assign_get_submission_status", assignid=assignid, userid=userid)
+    if isinstance(d, dict) and "exception" in d:
+        return None
+    fb = d.get("feedback") or {}
+    if not fb:
+        return None
+    grade = fb.get("grade") or {}
+    comentario = ""
+    for p in fb.get("plugins", []):
+        if p.get("type") == "comments":
+            for ef in p.get("editorfields") or []:
+                if ef.get("name") == "comments":
+                    comentario = ef.get("text") or ""
+    try:
+        nota = float(grade.get("grade") or 0)
+    except (TypeError, ValueError):
+        nota = 0.0
+    return {
+        "grade": nota,
+        "gradefordisplay": fb.get("gradefordisplay") or "",
+        "grader": grade.get("grader"),
+        "graded_date": fb.get("gradeddate") or grade.get("timemodified"),
+        "feedback": comentario,
+    }
+
+
 def download(url, dest):
     """Descarga un archivo de Moodle usando el token de la sesión actual."""
     token, _site = _auth()

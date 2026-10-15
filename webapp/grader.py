@@ -180,6 +180,38 @@ def extract_text(path, filename):
 
 # ───────────────────────── Calificación ─────────────────────────
 
+def _fmt_nota(v):
+    """Número con coma decimal y sin ceros sobrantes: 2.75 → «2,75», 3.0 → «3»."""
+    try:
+        f = float(v)
+    except (TypeError, ValueError):
+        return "—"
+    texto = ("%.2f" % f).rstrip("0").rstrip(".")
+    return (texto or "0").replace(".", ",")
+
+
+def detalle_criterios(criteria, grade, max_grade):
+    """Detalle por criterio (nota obtenida y por qué) para la retroalimentación.
+
+    Se compone en Python, no por el modelo: así el número que ve el estudiante
+    es siempre el mismo que el que se registra en Moodle.
+    """
+    if not criteria:
+        return ""
+    lineas = ["Detalle por criterio:"]
+    for c in criteria:
+        nombre = (c.get("name") or "Criterio").strip()
+        puntos = _fmt_nota(c.get("score"))
+        tope = _fmt_nota(c.get("max"))
+        nivel = (c.get("level") or "").strip()
+        encabezado = (f"• {nombre} — {nivel} ({puntos}/{tope})" if nivel
+                      else f"• {nombre} — {puntos}/{tope}")
+        comentario = (c.get("comment") or "").strip()
+        lineas.append(f"{encabezado}: {comentario}" if comentario else encabezado)
+    lineas.append(f"Nota final: {_fmt_nota(grade)} / {_fmt_nota(max_grade)}")
+    return "\n".join(lineas)
+
+
 def grade_one(consigna, rubric, max_grade, text, student_name=""):
     """Devuelve dict con criterios puntuados, nota escalada, justificación y feedback.
 
@@ -297,6 +329,13 @@ def grade_one(consigna, rubric, max_grade, text, student_name=""):
         grade = 0.0
     grade = max(0.0, min(grade, float(max_grade)))
 
+    # La retroalimentación que verá el estudiante incluye el desglose: qué obtuvo
+    # en cada criterio y el porqué. El docente puede editarla antes de publicar.
+    feedback = (data.get("feedback") or "").strip()
+    detalle = detalle_criterios(criteria, grade, max_grade)
+    if detalle:
+        feedback = f"{feedback}\n\n{detalle}".strip()
+
     return {
         "criteria": criteria,
         "earned": round(earned, 2),
@@ -304,7 +343,7 @@ def grade_one(consigna, rubric, max_grade, text, student_name=""):
         "grade": grade,
         "max_grade": max_grade,
         "summary": data.get("summary", ""),
-        "feedback": data.get("feedback", ""),
+        "feedback": feedback,
     }
 
 
