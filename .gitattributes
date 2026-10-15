@@ -1,0 +1,23 @@
+# Normaliza los finales de línea para que el repositorio funcione igual
+# en Windows, Linux y macOS (evita diffs de "todo el archivo cambió").
+
+* text=auto
+
+# Linux / macOS → LF
+*.sh   text eol=lf
+*.py   text eol=lf
+*.json text eol=lf
+*.md   text eol=lf
+
+# Windows → CRLF
+*.bat  text eol=crlf
+*.cmd  text eol=crlf
+
+# Binarios (nunca convertir)
+*.png  binary
+*.jpg  binary
+*.jpeg binary
+*.gif  binary
+*.pdf  binary
+*.zip  binary
+*.rar  binary

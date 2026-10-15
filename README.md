@@ -4,6 +4,8 @@ Aplicación web que **califica automáticamente las tareas de Moodle con un agen
 
 Pensada para docentes que **no tienen acceso de administrador** al Moodle institucional: funciona con la **API REST nativa** (servicio `moodle_mobile_app`), sin instalar ningún plugin.
 
+> 📚 **¿Quieres entender cómo funciona por dentro?** Consulta **[DOCUMENTACION.md](DOCUMENTACION.md)**: arquitectura, flujo de datos, integración con Moodle y con el modelo de IA, modelo de datos, decisiones de diseño y limitaciones.
+
 ---
 
 ## ✨ Características
@@ -37,6 +39,7 @@ Pensada para docentes que **no tienen acceso de administrador** al Moodle instit
 
 | Requisito | Detalle |
 |---|---|
+| **Sistema operativo** | Linux, macOS o Windows |
 | **Python** | 3.10 o superior |
 | **Moodle** | Con servicios web activados y el servicio `moodle_mobile_app` habilitado |
 | **Rol** | Docente del curso (no se necesita administrador) |
@@ -46,25 +49,149 @@ Pensada para docentes que **no tienen acceso de administrador** al Moodle instit
 
 ## 🚀 Instalación
 
+Elige tu sistema operativo. En los tres casos terminas con la app en **http://localhost:5050/**.
+
+**Antes de empezar necesitas:** Python 3.10+, Git y una clave de API del modelo (ver [Configuración](#️-configuración)).
+
+### 🐧 Linux
+
+<details open>
+<summary><b>Debian / Ubuntu / Mint</b></summary>
+
 ```bash
+sudo apt update
+sudo apt install -y python3 python3-venv python3-pip git
+
 git clone https://github.com/TU_USUARIO/calificador-moodle.git
-cd calificador-moodle/webapp
+cd calificador-moodle
+
+cp .env.example .env
+nano .env            # rellena DEEPSEEK_API_KEY, MOODLE_SITE y SECRET_KEY
+
+cd webapp
+chmod +x run.sh
+./run.sh
+```
+</details>
+
+<details>
+<summary><b>Fedora / RHEL / CentOS</b></summary>
+
+```bash
+sudo dnf install -y python3 python3-pip git
+
+git clone https://github.com/TU_USUARIO/calificador-moodle.git
+cd calificador-moodle
+
+cp .env.example .env && nano .env
+
+cd webapp && chmod +x run.sh && ./run.sh
+```
+</details>
+
+<details>
+<summary><b>Arch / Manjaro</b></summary>
+
+```bash
+sudo pacman -S --needed python python-pip git
+
+git clone https://github.com/TU_USUARIO/calificador-moodle.git
+cd calificador-moodle
+
+cp .env.example .env && nano .env
+
+cd webapp && chmod +x run.sh && ./run.sh
+```
+</details>
+
+**Extras útiles en Linux**
+
+| Tema | Comando |
+|---|---|
+| Leer entregas `.rar` | `sudo apt install unrar p7zip-full` (o `unar`) |
+| Abrir el puerto a la red local | `sudo ufw allow 5050/tcp` |
+| Ver tu IP local | `hostname -I` |
+
+**Opcional — dejarlo corriendo como servicio (systemd)**
+
+```ini
+# /etc/systemd/system/calificador-moodle.service
+[Unit]
+Description=Calificador Moodle
+After=network.target
+
+[Service]
+User=TU_USUARIO
+WorkingDirectory=/opt/calificador-moodle/webapp
+ExecStart=/opt/calificador-moodle/webapp/venv/bin/python app.py
+Restart=on-failure
+
+[Install]
+WantedBy=multi-user.target
+```
+
+```bash
+sudo systemctl daemon-reload
+sudo systemctl enable --now calificador-moodle
+```
+
+### 🍎 macOS
+
+```bash
+# 1. Python 3.10+ (si no lo tienes)
+brew install python          # o descárgalo de https://www.python.org/downloads/
+
+# 2. Clonar
+git clone https://github.com/TU_USUARIO/calificador-moodle.git
+cd calificador-moodle
+
+# 3. Credenciales
+cp .env.example .env
+open -e .env                 # rellena DEEPSEEK_API_KEY, MOODLE_SITE y SECRET_KEY
+
+# 4. Arrancar
+cd webapp
 chmod +x run.sh
 ./run.sh
 ```
 
-Abre **http://localhost:5050/** en el navegador.
+- La primera vez macOS pregunta si permites **conexiones entrantes** → *Permitir* (solo si quieres usarlo desde otra PC).
+- Para `.rar` no hace falta nada extra: macOS ya incluye `bsdtar`.
+- Ver tu IP local: `ipconfig getifaddr en0`
 
-`run.sh` crea el entorno virtual e instala las dependencias la primera vez.
+### 🪟 Windows
+
+Necesitas **Python 3.10+** desde [python.org](https://www.python.org/downloads/) marcando la casilla **«Add Python to PATH»**.
+
+```bat
+:: 1. Clonar (o descargar el ZIP del repositorio y descomprimirlo)
+git clone https://github.com/TU_USUARIO/calificador-moodle.git
+cd calificador-moodle
+
+:: 2. Credenciales
+copy .env.example .env
+notepad .env
+
+:: 3. Arrancar (o simplemente doble clic en run.bat)
+cd webapp
+run.bat
+```
+
+- La primera vez Windows preguntará por el **firewall** → permitir en redes **privadas**.
+- Para leer `.rar` instala [7-Zip](https://www.7-zip.org/) (Windows 10+ ya trae `tar.exe`, que suele bastar).
+- Ver tu IP local: `ipconfig` → «Dirección IPv4».
+- Guía detallada: **[webapp/SETUP_WINDOWS.md](webapp/SETUP_WINDOWS.md)**.
+
+### 📦 Instalación manual (cualquier sistema)
 
 <details>
-<summary>Instalación manual (paso a paso)</summary>
+<summary>Si prefieres no usar los lanzadores</summary>
 
 ```bash
 cd webapp
 python3 -m venv venv
-venv/bin/pip install -r requirements.txt
-venv/bin/python app.py
+venv/bin/pip install -r requirements.txt    # Windows: venv\Scripts\pip.exe install -r requirements.txt
+venv/bin/python app.py                      # Windows: venv\Scripts\python.exe app.py
 ```
 </details>
 
@@ -90,6 +217,35 @@ cp .env.example .env
 | `PORT` | — | Puerto del servidor (por defecto `5050`) |
 
 > El **token de Moodle** no se guarda en disco: se obtiene al iniciar sesión y viaja dentro de la cookie de sesión firmada. Al cerrar sesión desaparece.
+
+---
+
+## 🌐 Acceso desde otras PC de la red local
+
+Con `HOST=0.0.0.0` (valor por defecto) el servidor es accesible desde cualquier equipo de la misma red Wi-Fi/LAN. Al arrancar, el lanzador te muestra la dirección:
+
+```
+Iniciando el Calificador Moodle…
+  (en la red local: http://192.168.1.25:5050/)
+```
+
+| Sistema | Cómo ver tu IP local |
+|---|---|
+| 🐧 Linux | `hostname -I` |
+| 🍎 macOS | `ipconfig getifaddr en0` |
+| 🪟 Windows | `ipconfig` → «Dirección IPv4» |
+
+Desde el otro equipo, abre `http://<esa-IP>:5050/`.
+
+Si no carga, revisa: **(1)** que estén en la misma red, **(2)** el firewall, y **(3)** que la red Wi-Fi no tenga activado el «aislamiento de clientes».
+
+| Sistema | Abrir el puerto 5050 |
+|---|---|
+| 🐧 Linux | `sudo ufw allow 5050/tcp` |
+| 🍎 macOS | Ajustes → Red → Firewall → permitir la conexión entrante |
+| 🪟 Windows | Aceptar el aviso del firewall para redes **privadas** |
+
+> Si solo lo usarás en tu propio equipo, pon `HOST=127.0.0.1` en el `.env` y no quedará expuesto a la red.
 
 ---
 
@@ -163,13 +319,18 @@ Si vas a publicar este proyecto, revisa tu `.env` y tu historial de Git antes de
 ├── .env                    # Credenciales ⚠️ NO se sube (creado desde .env.example)
 ├── .env.example            # Plantilla de credenciales
 ├── .gitignore
-├── README.md
+├── .gitattributes          # Finales de línea consistentes entre Windows/Linux/macOS
+├── LICENSE                 # MIT
+├── README.md               # Guía de instalación y uso
+├── DOCUMENTACION.md        # Documentación técnica en profundidad
 └── webapp/
     ├── app.py              # Backend Flask (endpoints, trabajos de calificación)
     ├── grader.py           # Motor de calificación (extracción de texto + LLM)
-    ├── run.sh / run.bat    # Lanzadores macOS-Linux / Windows
+    ├── run.sh              # Lanzador para Linux y macOS
+    ├── run.bat             # Lanzador para Windows
     ├── requirements.txt
-    ├── SETUP_WINDOWS.md    # Guía de instalación en Windows
+    ├── SETUP_WINDOWS.md    # Guía detallada de instalación en Windows
+    ├── README.md           # Nota breve sobre esta carpeta
     ├── rubrics/            # Rúbricas en JSON
     ├── static/             # app.js · style.css
     ├── templates/          # index.html
@@ -179,27 +340,27 @@ Si vas a publicar este proyecto, revisa tu `.env` y tu historial de Git antes de
 
 ---
 
-## 🪟 Windows
-
-Consulta **[webapp/SETUP_WINDOWS.md](webapp/SETUP_WINDOWS.md)**. En resumen: instala Python 3.10+ marcando *«Add Python to PATH»*, copia la carpeta del proyecto, crea el `.env` a partir de `.env.example` y haz doble clic en `run.bat`.
-
----
-
 ## 🛠️ Problemas comunes
 
 | Síntoma | Causa y solución |
 |---|---|
 | No aparecen cursos | El usuario no es docente de ningún curso, o el `MOODLE_SITE` es incorrecto |
-| «Credenciales inválidas» al entrar | Usa tu usuario de Moodle, no el correo, o el servicio `moodle_mobile_app` está deshabilitado |
-| El agente tarda y marca algún error | El proveedor del modelo encola respuestas. La app reintenta y continúa; vuelve a calificar solo los marcados |
+| «Credenciales inválidas» al entrar | Usa tu usuario de Moodle (no el correo), o el servicio `moodle_mobile_app` está deshabilitado en ese Moodle |
+| El agente tarda y marca algún error | El proveedor del modelo encola respuestas. La app reintenta automáticamente y continúa; vuelve a calificar solo los que quedaron en error |
 | Una entrega sale con nota 0.0 | El archivo es una imagen o un escaneo manuscrito: el agente solo trabaja con texto |
 | `Permission denied: ./run.sh` | Ejecuta `chmod +x run.sh` |
+| Falla `python3 -m venv` / «No module named venv» | Falta el paquete: `sudo apt install python3-venv` (Debian/Ubuntu) |
+| «python no se reconoce como comando» | Reinstala Python marcando *Add Python to PATH* (Windows) |
+| El puerto 5050 está ocupado | Define `PORT=5051` en el `.env` |
+| No carga desde otra PC | Revisa firewall y red → [Acceso desde la red local](#-acceso-desde-otras-pc-de-la-red-local) |
+| Hay que volver a iniciar sesión | Cambiaste `SECRET_KEY` en el `.env`: las sesiones abiertas se invalidan |
+| Las entregas `.rar` no se leen | Linux: `sudo apt install unrar p7zip-full` · Windows: instala [7-Zip](https://www.7-zip.org/) |
 
 ---
 
 ## 📄 Licencia
 
-Sin licencia definida todavía. Si vas a publicarlo, añade un archivo `LICENSE` (por ejemplo, MIT).
+Distribuido bajo la licencia **MIT** — consulta el archivo [LICENSE](LICENSE). Puedes usarlo, modificarlo y redistribuirlo citando la autoría.
 
 ---
 

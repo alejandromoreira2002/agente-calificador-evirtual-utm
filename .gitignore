@@ -22,7 +22,6 @@ __pycache__/
 .DS_Store
 Thumbs.db
 *.log
-hola.md
 
 # ─────────── Editores ───────────
 .idea/
