@@ -234,6 +234,21 @@ button.mini:hover { background: #f0f3f9; }
   font-family: inherit;
 }
 
+/* Campo de contraseña con botón para mostrarla u ocultarla */
+.pass-wrap { position: relative; display: flex; align-items: center; }
+.field .pass-wrap input[type=text],
+.field .pass-wrap input[type=password] { width: 100%; padding-right: 42px; }
+.pass-toggle {
+  position: absolute; right: 6px; top: 50%; transform: translateY(-50%);
+  display: flex; align-items: center; justify-content: center;
+  width: 30px; height: 30px; padding: 0; line-height: 0;
+  background: none; border: 0; border-radius: 6px;
+  color: var(--muted); cursor: pointer;
+}
+.pass-toggle:hover { color: var(--fg); background: rgba(16, 24, 40, .06); }
+.pass-toggle:focus-visible { outline: 2px solid var(--accent); outline-offset: 1px; }
+.pass-toggle svg { fill: none; stroke: currentColor; stroke-width: 2; stroke-linecap: round; stroke-linejoin: round; }
+
 .criterion-row { display: flex; gap: 8px; margin-bottom: 8px; align-items: center; }
 .criterion-row .crit-name { flex: 1.2; }
 .criterion-row .crit-desc { flex: 1.6; }

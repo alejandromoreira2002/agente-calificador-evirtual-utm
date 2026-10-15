@@ -57,6 +57,35 @@ def _clear_auth(exc):
     api.clear_auth()
 
 
+# Códigos de error de Moodle traducidos a un mensaje que entienda el docente.
+_ERRORES_LOGIN = {
+    "invalidlogin": "Usuario o contraseña incorrectos. Revisa tus datos del Aula Evirtual.",
+    "usernotfound": "Ese usuario no existe en el Aula Evirtual.",
+    "invalidtoken": "La credencial del servicio expiró. Inténtalo otra vez.",
+    "accessexception": "El servicio móvil de Moodle no está disponible en este momento.",
+    "webservicesnotenabled": "Este Moodle tiene los servicios web desactivados.",
+    "enablewsdescription": "Este Moodle tiene los servicios web desactivados.",
+    "servicenotavailable": "El servicio «moodle_mobile_app» está deshabilitado en este Moodle.",
+}
+
+
+def _mensaje_login(texto):
+    """Traduce los códigos o mensajes de error de Moodle a algo claro para el docente."""
+    t = (texto or "").strip()
+    clave = t.lower().replace(" ", "").replace("_", "")
+    if clave in _ERRORES_LOGIN:
+        return _ERRORES_LOGIN[clave]
+    bajo = t.lower()
+    # Moodle a veces devuelve el mensaje ya traducido en lugar del código de error.
+    if "usernotfound" in clave or "usuario no encontrado" in bajo:
+        return _ERRORES_LOGIN["usernotfound"]
+    if "inválid" in bajo or "invalid" in bajo:
+        return _ERRORES_LOGIN["invalidlogin"]
+    if "servicio" in bajo and ("deshabilitad" in bajo or "no disponible" in bajo):
+        return _ERRORES_LOGIN["servicenotavailable"]
+    return t or "No se pudo iniciar sesión. Inténtalo de nuevo."
+
+
 @app.route("/api/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
@@ -79,7 +108,7 @@ def login():
             "userid": info.get("userid"),
         })
     except Exception as e:
-        return jsonify({"error": str(e)}), 401
+        return jsonify({"error": _mensaje_login(str(e))}), 401
 
 
 @app.route("/api/logout", methods=["POST"])

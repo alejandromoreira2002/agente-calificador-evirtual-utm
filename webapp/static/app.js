@@ -8,7 +8,9 @@ let state = {
 
 async function api(path, opts = {}) {
   const res = await fetch(path, { headers: { "Content-Type": "application/json" }, ...opts });
-  if (res.status === 401) {
+  // Un 401 en /api/login significa "credenciales incorrectas", no "sesión expirada":
+  // se deja pasar para mostrar el mensaje real que devuelve el servidor.
+  if (res.status === 401 && path !== "/api/login") {
     showLogin();
     throw new Error("Sesión expirada");
   }
@@ -55,6 +57,22 @@ function showLogin() {
   state.course = null; state.assignment = null; state.preview = null;
   $("#login-screen").classList.remove("hidden");
   $("#course-list").innerHTML = '<p class="muted">Inicia sesión para ver tus cursos.</p>';
+  $("#login-error").textContent = "";
+  setPasswordVisible(false);   // al volver al login, la contraseña se oculta otra vez
+}
+
+// Mostrar / ocultar la contraseña (botón del ojito)
+function setPasswordVisible(visible) {
+  const input = $("#login-password");
+  const btn = $("#toggle-password");
+  if (!input || !btn) return;
+  input.type = visible ? "text" : "password";
+  btn.setAttribute("aria-pressed", String(visible));
+  const etiqueta = visible ? "Ocultar contraseña" : "Mostrar contraseña";
+  btn.setAttribute("aria-label", etiqueta);
+  btn.setAttribute("title", etiqueta);
+  btn.querySelector(".icon-eye").classList.toggle("hidden", visible);
+  btn.querySelector(".icon-eye-off").classList.toggle("hidden", !visible);
 }
 
 async function enterApp(me) {
@@ -632,6 +650,11 @@ $("#upload-excel-btn").addEventListener("click", () => $("#excel-input").click()
 $("#excel-input").addEventListener("change", (e) => {
   uploadExcel(e.target.files[0]);
   e.target.value = "";
+});
+
+$("#toggle-password").addEventListener("click", () => {
+  setPasswordVisible($("#login-password").type === "password");
+  $("#login-password").focus();
 });
 
 $("#login-form").addEventListener("submit", async (e) => {
