@@ -1,0 +1,30 @@
+# ─────────── Credenciales — NUNCA subir ───────────
+.env
+.env.*
+!.env.example
+secret_key
+webapp/secret_key
+
+# ─────────── Datos de estudiantes (privacidad) ───────────
+submissions/
+webapp/cache/
+report_*.md
+
+# ─────────── Entorno virtual y dependencias ───────────
+venv/
+webapp/venv/
+__pycache__/
+*.py[cod]
+*.egg-info/
+.pytest_cache/
+
+# ─────────── Sistema y temporales ───────────
+.DS_Store
+Thumbs.db
+*.log
+hola.md
+
+# ─────────── Editores ───────────
+.idea/
+.vscode/
+*.swp

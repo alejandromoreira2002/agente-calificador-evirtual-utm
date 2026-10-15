@@ -1,0 +1,11 @@
+{
+  "id": "informe_tecnico",
+  "name": "Informe técnico / ensayo",
+  "description": "Para informes, ensayos y trabajos escritos con investigación.",
+  "criteria": [
+    {"name": "Cumplimiento de la consigna", "description": "¿Cubre todos los puntos pedidos en la tarea?", "max_points": 4},
+    {"name": "Corrección técnica", "description": "¿Los conceptos, ejemplos y datos son correctos?", "max_points": 3},
+    {"name": "Estructura y claridad", "description": "¿Introducción, desarrollo, conclusiones y orden lógico?", "max_points": 2},
+    {"name": "Referencias y formato", "description": "¿Cita fuentes y mantiene un formato adecuado?", "max_points": 1}
+  ]
+}

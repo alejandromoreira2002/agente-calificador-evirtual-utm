@@ -1,0 +1,158 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Calificador Moodle · Aula Evirtual</title>
+  <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+  <!-- Pantalla de login -->
+  <div id="login-screen" class="login-screen">
+    <div class="login-card">
+      <div class="login-logo">🎓</div>
+      <h2>Calificador Moodle</h2>
+      <p class="muted">Inicia sesión con tu cuenta del Aula Evirtual</p>
+      <form id="login-form">
+        <div class="field">
+          <label>Usuario</label>
+          <input id="login-username" type="text" autocomplete="username" placeholder="correo@utm.edu.ec" />
+        </div>
+        <div class="field">
+          <label>Contraseña</label>
+          <input id="login-password" type="password" autocomplete="current-password" placeholder="••••••••" />
+        </div>
+        <p class="muted small err-text" id="login-error"></p>
+        <button class="primary" type="submit" id="login-btn">Iniciar sesión</button>
+      </form>
+    </div>
+  </div>
+
+  <header class="topbar">
+    <div class="brand">
+      <span class="logo">🎓</span>
+      <div>
+        <h1>Calificador Moodle</h1>
+        <p class="sub" id="site-label">Aula Evirtual · UTM</p>
+      </div>
+    </div>
+    <div class="user">
+      <span id="user-label">…</span>
+      <button class="logout" id="logout-btn" type="button">Salir</button>
+    </div>
+  </header>
+
+  <div class="layout">
+    <aside class="sidebar">
+      <div class="sidebar-title">Cursos</div>
+      <div id="course-list" class="course-list">
+        <p class="muted">Cargando…</p>
+      </div>
+    </aside>
+
+    <main class="main" id="main">
+      <div class="empty" id="empty">
+        <h2>Selecciona un curso para empezar</h2>
+        <p class="muted">Elige un curso del panel izquierdo para ver sus tareas.</p>
+      </div>
+
+      <div id="assignments-view" class="hidden">
+        <h2 id="course-name"></h2>
+        <div id="assign-list" class="assign-list"></div>
+      </div>
+
+      <div id="assignment-view" class="hidden">
+        <button class="back" id="back-btn">← Volver a tareas</button>
+        <h2 id="assign-title"></h2>
+        <div class="meta">
+          <span id="assign-grade"></span>
+          <span id="assign-due"></span>
+        </div>
+        <div class="consigna card">
+          <h3>Consigna</h3>
+          <p id="assign-intro"></p>
+          <div id="assign-attachments" class="attachments"></div>
+        </div>
+
+        <div class="toolbar card">
+          <label>Rúbrica de calificación</label>
+          <button class="rubric-picker" id="rubric-picker-btn" type="button">
+            📋 <span id="rubric-picker-label">Seleccionar rúbrica</span> <span class="caret">▾</span>
+          </button>
+          <button class="primary" id="grade-btn">🤖 Calificar con agente</button>
+        </div>
+
+        <div id="students-card" class="card">
+          <h3>Entregas de estudiantes</h3>
+          <div id="students-list"></div>
+        </div>
+
+        <div id="preview-card" class="card hidden">
+          <div class="preview-head">
+            <h3>Previsualización de notas <span class="pill" id="preview-rubric"></span></h3>
+            <button class="primary" id="publish-btn" disabled>📤 Publicar en Moodle</button>
+          </div>
+          <p class="muted small" id="preview-status"></p>
+          <div id="preview-table"></div>
+        </div>
+      </div>
+    </main>
+  </div>
+
+  <!-- Modal de gestión de rúbricas -->
+  <div id="rubric-modal" class="modal-overlay hidden">
+    <div class="modal">
+      <div class="modal-head">
+        <h3 id="modal-title">Gestionar rúbricas</h3>
+        <button class="modal-close" id="modal-close" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="rubric-manager">
+          <div id="rubric-list-modal" class="rubric-list-modal"></div>
+          <div class="manager-actions">
+            <button class="secondary" id="new-rubric-btn" type="button">＋ Nueva rúbrica</button>
+            <button class="secondary" id="upload-excel-btn" type="button">📊 Cargar desde Excel</button>
+            <input type="file" id="excel-input" accept=".xlsx,.csv" hidden>
+          </div>
+        </div>
+
+        <div id="rubric-form" class="hidden">
+          <div class="field">
+            <label>Nombre de la rúbrica</label>
+            <input id="rubric-name" type="text" placeholder="Ej. Informe técnico">
+          </div>
+          <div class="field">
+            <label>Descripción</label>
+            <textarea id="rubric-desc" rows="2" placeholder="Opcional"></textarea>
+          </div>
+          <div class="field">
+            <label>Tipo de rúbrica</label>
+            <select id="rubric-mode">
+              <option value="simple">Simple (puntos por criterio)</option>
+              <option value="levels">Por niveles (Excelente / Satisfactorio / Insuficiente…)</option>
+            </select>
+          </div>
+          <div class="field hidden" id="levels-block">
+            <label>Niveles <span class="muted small">(define los niveles y su % de puntos)</span></label>
+            <div id="levels-list"></div>
+            <button class="secondary" id="add-level-btn" type="button">＋ Añadir nivel</button>
+          </div>
+          <div class="field">
+            <label>Criterios</label>
+            <div id="criteria-list"></div>
+            <button class="secondary" id="add-criterion-btn" type="button">＋ Añadir criterio</button>
+          </div>
+          <div class="form-actions">
+            <button class="primary" id="save-rubric-btn" type="button">Guardar rúbrica</button>
+            <button class="ghost" id="cancel-rubric-btn" type="button">Cancelar</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <div id="toast" class="toast hidden"></div>
+
+  <script src="/static/app.js"></script>
+</body>
+</html>

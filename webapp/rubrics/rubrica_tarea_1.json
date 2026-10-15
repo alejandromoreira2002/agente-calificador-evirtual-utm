@@ -1,0 +1,75 @@
+{
+  "id": "rubrica_tarea_1",
+  "name": "Rubrica Tarea 1",
+  "description": "",
+  "levels": [
+    {
+      "name": "Excelente",
+      "points_pct": 100.0
+    },
+    {
+      "name": "Satisfactorio",
+      "points_pct": 50.0
+    },
+    {
+      "name": "Insuficiente",
+      "points_pct": 0.0
+    }
+  ],
+  "criteria": [
+    {
+      "name": "1. Introducción",
+      "max_points": 0.3,
+      "descriptors": {
+        "Excelente": "Delimita el ámbito con precisión, justifica la elección con un argumento propio y anuncia las aplicaciones y el criterio con que las seleccionó",
+        "Satisfactorio": "Presenta el ámbito y anuncia las aplicaciones, pero la justificación es genérica o falta el criterio de selección",
+        "Insuficiente": "No delimita el ámbito o no anuncia lo que desarrollará el informe"
+      }
+    },
+    {
+      "name": "2. Aplicaciones (2 o 3)",
+      "max_points": 0.8,
+      "descriptors": {
+        "Excelente": "Cada aplicación desarrolla los cuatro elementos con precisión técnica: problema, funcionamiento, evidencia con fuente citada y limitación o riesgo",
+        "Satisfactorio": "Desarrolla los cuatro elementos en la mayoría de las aplicaciones, con algún elemento superficial o sin su fuente",
+        "Insuficiente": "Presenta menos de dos aplicaciones, o deja elementos sin desarrollar en todas"
+      }
+    },
+    {
+      "name": "3. Análisis comparativo",
+      "max_points": 0.6,
+      "descriptors": {
+        "Excelente": "Establece semejanzas y diferencias relevantes, argumenta con criterios explícitos cuál aplicación está más madura y lo respalda con fuentes",
+        "Satisfactorio": "Compara las aplicaciones, pero la valoración de madurez es parcial o poco sustentada",
+        "Insuficiente": "No compara, o solo enumera las aplicaciones una tras otra"
+      }
+    },
+    {
+      "name": "4. Aplicación para Computación",
+      "max_points": 0.5,
+      "descriptors": {
+        "Excelente": "Identifica un problema concreto de su carrera, explica cómo se aplicaría la IA generativa y señala los requisitos (datos, métricas) y los riesgos",
+        "Satisfactorio": "Propone una aplicación pertinente, pero sin detallar requisitos ni riesgos",
+        "Insuficiente": "No propone una aplicación, o no guarda relación con la carrera"
+      }
+    },
+    {
+      "name": "5. Conclusiones",
+      "max_points": 0.3,
+      "descriptors": {
+        "Excelente": "Declara qué aprendió que no sabía y emite un juicio propio sobre el valor y los límites del uso en ese ámbito",
+        "Satisfactorio": "Presenta conclusiones descriptivas, sin un juicio propio claro",
+        "Insuficiente": "Repite lo ya dicho en el informe o la sección falta"
+      }
+    },
+    {
+      "name": "6. Fuentes y referencias",
+      "max_points": 0.5,
+      "descriptors": {
+        "Excelente": "Usa al menos 3 fuentes verificables; todas las afirmaciones tienen su cita rastreable y las referencias están en APA 7.ª sin errores relevantes",
+        "Satisfactorio": "Cumple el mínimo de fuentes, pero con fallas de formato APA o alguna cita del texto sin su referencia",
+        "Insuficiente": "Usa menos fuentes de las exigidas, incluye fuentes no verificables (blog sin autoría, resumen sin enlace) o no presenta referencias"
+      }
+    }
+  ]
+}
