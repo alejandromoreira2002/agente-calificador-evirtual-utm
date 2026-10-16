@@ -86,6 +86,17 @@ def _mensaje_login(texto):
     return t or "No se pudo iniciar sesión. Inténtalo de nuevo."
 
 
+# Solo docentes: el usuario debe tener la forma nombre.apellido@utm.edu.ec.
+# Cualquier otro formato (por ejemplo el número de cédula con el que suelen
+# ingresar los estudiantes) se rechaza antes de consultar a Moodle.
+PATRON_DOCENTE = re.compile(r"^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+@utm\.edu\.ec$", re.IGNORECASE)
+
+MENSAJE_SOLO_DOCENTES = (
+    "Acceso restringido a docentes: el usuario debe ser tu correo institucional "
+    "con el formato nombre.apellido@utm.edu.ec."
+)
+
+
 @app.route("/api/login", methods=["POST"])
 def login():
     body = request.get_json(silent=True) or {}
@@ -93,6 +104,8 @@ def login():
     password = body.get("password") or ""
     if not username or not password:
         return jsonify({"error": "Usuario y contraseña son obligatorios"}), 400
+    if not PATRON_DOCENTE.match(username):
+        return jsonify({"error": MENSAJE_SOLO_DOCENTES}), 403
     try:
         token = api.login(username, password, site_url())
         info = api.get_site_info(token, site_url())

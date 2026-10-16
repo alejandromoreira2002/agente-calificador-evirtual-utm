@@ -537,6 +537,30 @@ Si se prefiere anonimizar, basta con no incluir el nombre en el prompt de `grade
 
 `.env` · `secret_key` · `submissions/` · `webapp/cache/` · `report_*.md` — credenciales y **entregas reales de estudiantes**.
 
+### Quién puede entrar
+
+La aplicación está reservada a **docentes**. Antes de consultar a Moodle se valida el formato del usuario:
+
+```
+^[a-z][a-z0-9]*(\.[a-z][a-z0-9]*)+@utm\.edu\.ec$     (sin distinguir mayúsculas)
+```
+
+Es decir, solo se acepta el patrón institucional **`nombre.apellido@utm.edu.ec`** (con la posibilidad de más segmentos, como `maria.josefa.ramirez@`, o de un número final para nombres duplicados, como `juan.perez2@`).
+
+Cualquier otro formato —el número de cédula con el que suelen ingresar los estudiantes, correos sin punto, otros dominios o variantes del dominio— **se rechaza con un `403` antes de contactar a Moodle**, así que no consume intentos de autenticación ni revela si la cuenta existe.
+
+| Usuario | Resultado |
+|---|---|
+| `teddy.moreira@utm.edu.ec` | ✅ pasa a validación contra Moodle |
+| `maria.josefa.ramirez@utm.edu.ec` | ✅ |
+| `juan.perez2@utm.edu.ec` | ✅ |
+| `1234567@utm.edu.ec` | ❌ 403 |
+| `estudiante@utm.edu.ec` | ❌ 403 |
+| `juan.perez@gmail.com` | ❌ 403 |
+| `juan.perez@utm.edu.ec.otro.com` | ❌ 403 |
+
+El control vive en `PATRON_DOCENTE` (`app.py`) y es **la única puerta de entrada**: la interfaz solo lo anuncia, no lo decide.
+
 ### Superficie de exposición
 
 Por defecto la app escucha en `0.0.0.0` para permitir el acceso desde el aula. **No tiene HTTPS ni límite de intentos de login**: está pensada para una red local de confianza. Para exponerla a internet harían falta, como mínimo, un proxy inverso con TLS y autenticación adicional.

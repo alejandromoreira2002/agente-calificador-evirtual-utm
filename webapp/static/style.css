@@ -314,6 +314,11 @@ button.mini:hover { background: #f0f3f9; }
 .login-logo { font-size: 44px; line-height: 1; }
 .login-card h2 { margin: 10px 0 4px; }
 .login-card p { margin: 0 0 18px; }
+.login-hint { margin: -10px 0 16px !important; line-height: 1.4; }
+.login-hint code {
+  background: #eef2f7; border: 1px solid var(--border); border-radius: 5px;
+  padding: 1px 5px; font-size: 11px; white-space: nowrap;
+}
 .login-card .field { text-align: left; }
 .login-card .primary { width: 100%; margin-top: 4px; padding: 11px; }
 .err-text { color: var(--err); min-height: 20px; margin: 6px 0 2px; }

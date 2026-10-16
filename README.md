@@ -251,7 +251,7 @@ Si no carga, revisa: **(1)** que estén en la misma red, **(2)** el firewall, y 
 
 ## 📖 Uso
 
-1. **Inicia sesión** con tu usuario y contraseña de Moodle.
+1. **Inicia sesión** con tu usuario y contraseña de Moodle (formato `nombre.apellido@utm.edu.ec`; los demás formatos se rechazan).
 2. Elige un **curso** y luego una **tarea**.
 3. Revisa la lista de entregas y **marca los estudiantes** que quieras calificar.
 4. Selecciona o crea una **rúbrica**.
@@ -295,6 +295,8 @@ nota = (puntaje obtenido / puntaje total de la rúbrica) × nota máxima de la t
 ---
 
 ## 🔒 Seguridad y privacidad
+
+**Quién puede entrar:** solo **docentes**. El usuario debe tener el formato institucional `nombre.apellido@utm.edu.ec`; cualquier otro formato (como el número de cédula de los estudiantes, correos sin punto u otros dominios) se **rechaza con un 403 antes de contactar a Moodle**.
 
 **Qué se envía al modelo de IA** (y qué no):
 
