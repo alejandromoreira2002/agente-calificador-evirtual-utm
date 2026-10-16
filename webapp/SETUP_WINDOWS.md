@@ -52,7 +52,6 @@ También puedes omitirlo y definir `MOODLE_SITE` en el `.env` (tiene prioridad).
 Copia `.env.example` como `.env` (**en la raíz del proyecto**, junto a `api.py`) y rellena los valores:
 
 ```
-DEEPSEEK_API_KEY=sk-tu_clave_aqui
 MOODLE_SITE=https://evirtual.utm.edu.ec
 GRADER_MODEL=deepseek-v4-flash
 SECRET_KEY=una_clave_aleatoria_larga

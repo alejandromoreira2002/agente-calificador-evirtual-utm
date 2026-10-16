@@ -3,7 +3,7 @@ const $$ = (s) => document.querySelectorAll(s);
 
 let state = {
   courses: [], rubrics: [], course: null, assignment: null, preview: null,
-  selectedRubricId: null, editingRubricId: null,
+  selectedRubricId: null, editingRubricId: null, apiKey: null,
 };
 
 async function api(path, opts = {}) {
@@ -15,9 +15,11 @@ async function api(path, opts = {}) {
     throw new Error("Sesión expirada");
   }
   if (!res.ok) {
-    let msg = res.statusText;
-    try { msg = (await res.json()).error || msg; } catch (e) {}
-    throw new Error(msg);
+    let msg = res.statusText, cuerpo = null;
+    try { cuerpo = await res.json(); msg = cuerpo.error || msg; } catch (e) {}
+    const err = new Error(msg);
+    err.body = cuerpo;   // permite reaccionar a casos concretos (p. ej. falta la clave de API)
+    throw err;
   }
   return res.json();
 }
@@ -75,17 +77,20 @@ function showLogin() {
 }
 
 // Mostrar / ocultar la contraseña (botón del ojito)
-function setPasswordVisible(visible) {
-  const input = $("#login-password");
-  const btn = $("#toggle-password");
-  if (!input || !btn) return;
+// Botón del ojito: muestra u oculta el contenido de un campo
+function mostrarCampo(btn, input, visible, etiqueta) {
+  if (!btn || !input) return;
   input.type = visible ? "text" : "password";
   btn.setAttribute("aria-pressed", String(visible));
-  const etiqueta = visible ? "Ocultar contraseña" : "Mostrar contraseña";
-  btn.setAttribute("aria-label", etiqueta);
-  btn.setAttribute("title", etiqueta);
+  const texto = (visible ? "Ocultar " : "Mostrar ") + etiqueta;
+  btn.setAttribute("aria-label", texto);
+  btn.setAttribute("title", texto);
   btn.querySelector(".icon-eye").classList.toggle("hidden", visible);
   btn.querySelector(".icon-eye-off").classList.toggle("hidden", !visible);
+}
+
+function setPasswordVisible(visible) {
+  mostrarCampo($("#toggle-password"), $("#login-password"), visible, "contraseña");
 }
 
 async function enterApp(me) {
@@ -101,6 +106,9 @@ async function enterApp(me) {
     if (rubrics.length) state.selectedRubricId = rubrics[0].id;
     renderCourses();
     updateRubricPicker();
+    const clave = await refreshApiKeyStatus();
+    // Sin clave de API no se puede calificar: se pide de inmediato
+    if (clave && !clave.configured) openApiKeyModal();
   } catch (e) {
     $("#course-list").innerHTML = `<p class="muted">Error: ${esc(e.message)}</p>`;
     toast("Error al cargar: " + e.message, "err");
@@ -546,6 +554,12 @@ async function grade() {
   if (!rubric) { toast("Selecciona o crea una rúbrica primero", "err"); openRubricModal(); return; }
   const userids = selectedStudentIds();
   if (!userids.length) { toast("Selecciona al menos un estudiante", "err"); return; }
+  // Sin clave propia no se califica: el consumo debe ir a la cuenta del docente
+  if (!state.apiKey || !state.apiKey.configured) {
+    toast("Configura tu clave de API antes de calificar", "err");
+    openApiKeyModal();
+    return;
+  }
   $("#grade-btn").disabled = true;
   $("#grade-btn").innerHTML = '<span class="spinner"></span> Preparando…';
   $("#preview-card").classList.remove("hidden");
@@ -562,6 +576,8 @@ async function grade() {
   } catch (e) {
     resetGradeBtn();
     toast("Error: " + e.message, "err");
+    // La clave se perdió (p. ej. el servidor se reinició): se pide otra vez
+    if (e.body && e.body.need_api_key) openApiKeyModal();
   }
 }
 
@@ -724,6 +740,78 @@ async function publish() {
   }
 }
 
+// ─────────────── Clave de API del modelo (por docente) ───────────────
+
+function openApiKeyModal() {
+  $("#apikey-modal").classList.remove("hidden");
+  $("#apikey-input").value = "";
+  mostrarCampo($("#apikey-toggle"), $("#apikey-input"), false, "clave");
+  refreshApiKeyStatus();
+}
+
+function closeApiKeyModal() {
+  $("#apikey-modal").classList.add("hidden");
+  $("#apikey-input").value = "";
+}
+
+async function refreshApiKeyStatus() {
+  const estado = $("#apikey-status");
+  try {
+    const s = await api("/api/apikey");
+    state.apiKey = s;
+    $("#apikey-label").textContent = s.configured ? s.hint : "Sin API key";
+    $("#apikey-btn").classList.toggle("ok", !!s.configured);
+    $("#apikey-delete").disabled = !s.configured;
+    if (estado) {
+      estado.textContent = s.configured
+        ? `✅ Configurada: ${s.hint}` + (s.remembered ? " · guardada entre reinicios" : " · solo en esta sesión")
+        : "⚠️ Todavía no has configurado ninguna clave.";
+    }
+    return s;
+  } catch (e) {
+    if (estado) estado.textContent = "No se pudo consultar el estado: " + e.message;
+    return null;
+  }
+}
+
+async function saveApiKey() {
+  const clave = $("#apikey-input").value.trim();
+  const estado = $("#apikey-status");
+  if (!clave) { estado.textContent = "Escribe tu clave."; return; }
+  const btn = $("#apikey-save");
+  btn.disabled = true;
+  btn.innerHTML = '<span class="spinner"></span> Verificando…';
+  try {
+    const r = await api("/api/apikey", {
+      method: "POST", body: JSON.stringify({ api_key: clave }),
+    });
+    $("#apikey-input").value = "";
+    await refreshApiKeyStatus();
+    if (r.verified && r.remembered) {
+      toast("Clave verificada y guardada", "ok");
+      closeApiKeyModal();
+    } else if (r.verified) {
+      toast("Clave verificada, pero no se pudo guardar en disco", "err");
+      estado.textContent = "⚠️ " + r.warning;
+    } else {
+      estado.textContent = "⚠️ " + r.warning;
+      toast("La clave no fue aceptada por el proveedor", "err");
+    }
+  } catch (e) {
+    estado.textContent = "Error: " + e.message;
+  } finally {
+    btn.disabled = false;
+    btn.textContent = "Guardar y verificar";
+  }
+}
+
+async function deleteApiKey() {
+  if (!confirm("¿Eliminar la clave de API guardada en esta sesión?")) return;
+  try { await api("/api/apikey", { method: "DELETE" }); } catch (e) {}
+  await refreshApiKeyStatus();
+  toast("Clave de API eliminada", "ok");
+}
+
 // ─────────────── wire-up ───────────────
 
 $("#back-btn").addEventListener("click", () => selectCourse(state.course.id));
@@ -733,6 +821,17 @@ $("#publish-btn").addEventListener("click", publish);
 $("#rubric-picker-btn").addEventListener("click", openRubricModal);
 $("#modal-close").addEventListener("click", closeRubricModal);
 $("#rubric-modal").addEventListener("click", (e) => { if (e.target.id === "rubric-modal") closeRubricModal(); });
+
+$("#apikey-btn").addEventListener("click", openApiKeyModal);
+$("#apikey-close").addEventListener("click", closeApiKeyModal);
+$("#apikey-modal").addEventListener("click", (e) => { if (e.target.id === "apikey-modal") closeApiKeyModal(); });
+$("#apikey-save").addEventListener("click", saveApiKey);
+$("#apikey-delete").addEventListener("click", deleteApiKey);
+$("#apikey-toggle").addEventListener("click", () => {
+  const input = $("#apikey-input");
+  mostrarCampo($("#apikey-toggle"), input, input.type === "password", "clave");
+  input.focus();
+});
 
 $("#new-rubric-btn").addEventListener("click", () => { state.editingRubricId = null; showRubricForm(); });
 $("#add-criterion-btn").addEventListener("click", () => {

@@ -194,7 +194,7 @@ Esto es lo que permite que **varios docentes usen la misma instancia** sin pisar
 
 **Descarga de archivos.** `download()` añade el token a la URL del archivo y lo baja con un User-Agent propio.
 
-### 4.2 `grader.py` — motor de calificación (467 líneas)
+### 4.2 `grader.py` — motor de calificación (485 líneas)
 
 Es el corazón del sistema. Se divide en tres responsabilidades:
 
@@ -256,7 +256,7 @@ Aquí se concentran los problemas reales encontrados en producción:
 - **Reintentos** con espera progresiva, y **detección de respuesta vacía** (el modelo a veces gasta los tokens "razonando" y devuelve `content` vacío).
 - **`max_tokens`** acotado para evitar respuestas desbordadas.
 
-### 4.3 `app.py` — servidor web (644 líneas)
+### 4.3 `app.py` — servidor web (725 líneas)
 
 Es la capa de orquestación: expone la API interna, gestiona sesiones y coordina los trabajos.
 
@@ -342,7 +342,10 @@ Toda la API interna vive bajo `/api/` y exige sesión válida (excepto el login)
 | Método | Ruta | Para qué sirve |
 |---|---|---|
 | `POST` | `/api/login` | Valida usuario/contraseña contra Moodle y crea la sesión |
-| `POST` | `/api/logout` | Cierra la sesión |
+| `POST` | `/api/logout` | Cierra la sesión (y descarta la clave de API) |
+| `GET` | `/api/apikey` | Estado de la clave del docente (configurada o no + pista enmascarada) |
+| `POST` | `/api/apikey` | Guarda y **verifica** la clave contra el proveedor |
+| `DELETE` | `/api/apikey` | Elimina la clave de la sesión |
 | `GET` | `/api/me` | Datos del docente conectado |
 | `GET` | `/api/courses` | Cursos donde es docente |
 | `GET` | `/api/courses/<cid>/assignments` | Tareas **agrupadas por sección**, con contadores |
@@ -453,7 +456,61 @@ Evalúa la entrega y devuelve el JSON con el nivel elegido en cada criterio.
 
 > **Nota:** el proveedor a veces ignora `thinking: disabled` y gasta los tokens en `reasoning_content`, devolviendo `content` vacío. El código lo detecta y reintenta.
 
-### 7.3 Coste
+### 7.3 De quién es la clave de API
+
+La clave con la que se llama al modelo **no es del servidor, es de cada docente**. Así el consumo se factura a la cuenta de quien califica, y el dueño de la instancia no paga las correcciones de los demás.
+
+El recorrido de la clave:
+
+```
+docente escribe la clave en el modal «🔑 Mi API key»
+        │  POST /api/apikey
+        ▼
+grader.probar_clave()   → una llamada mínima al proveedor la verifica
+        │
+        ├──► LLM_KEYS[userid]          caché EN MEMORIA (uso inmediato)
+        │
+        └──► secretos.guardar()        copia CIFRADA en webapp/secretos.db
+                  │  Fernet (AES-128-CBC + HMAC-SHA256)
+                  │  clave maestra = SECRETOS_KEY del .env  (fuera de la BD)
+                  ▼
+             ╔════════════════════════════════════╗
+             ║ userid │ nombre │ cifrado (BLOB)   ║
+             ║ 144757 │ TEDDY  │ gAAAAAB… (ilegible)║
+             ╚════════════════════════════════════╝
+
+al calificar:  grade_submissions(..., api_key=clave)  →  Authorization: Bearer …
+al reiniciar el servidor: la memoria se vacía y la clave se vuelve a
+                          descifrar desde secretos.db de forma transparente
+```
+
+**Dos motivos para persistirla:** las claves de DeepSeek **solo se pueden ver una vez** al generarlas (si se pierde, hay que crear otra), y volver a escribirla tras cada reinicio del servidor es una molestia evitable.
+
+Decisiones de esta parte:
+
+| Decisión | Motivo |
+|---|---|
+| Se guarda **cifrada**, nunca en claro | Un archivo de base de datos filtrado o incluido por error en un respaldo es el escenario realista; sin la clave maestra no sirve de nada |
+| La **clave maestra vive fuera** de la base de datos (en el `.env`) | Guardarla dentro anularía el cifrado: quien tuviera el archivo tendría también la llave |
+| La memoria sigue siendo la vía rápida | Se descifra una sola vez por sesión, no en cada llamada al modelo |
+| **Nunca** viaja en la cookie de sesión | La cookie de Flask está firmada pero **no cifrada**: es legible por el navegador |
+| El navegador solo recibe una **pista enmascarada** (`sk-2cb1…3761`) | Permite confirmar cuál está puesta sin exponerla |
+| Se **verifica** contra el proveedor al guardarla | Evita descubrir que estaba mal escrita a mitad de una corrección |
+| Cerrar sesión borra **solo la copia en memoria** | La guardada se conserva para no obligar a reescribirla; «Eliminar» sí borra las dos |
+| Sin clave **no se califica** | La aplicación devuelve `400` con `need_api_key: true` y la interfaz abre el modal sola |
+
+**Qué protege y qué no:**
+
+| Escenario | ¿Protegido? |
+|---|---|
+| Alguien copia `secretos.db` (respaldo, USB, `git add` despistado) | ✅ ilegible sin la clave maestra |
+| Alguien lee el proceso mientras califica | ❌ la clave está en memoria, como en cualquier servicio |
+| Alguien se lleva el equipo completo (BD **y** `.env`) | ❌ el cifrado no ayuda: están las dos piezas |
+| Se pierde el `.env` con `SECRETOS_KEY` | ⚠️ no se puede descifrar (no se corrompe nada): habrá que volver a escribirla |
+
+> La clave **nunca** se lee del `.env`: no existe una clave «del servidor». Calificar exige siempre la clave del docente conectado y, si falta, la aplicación responde `400` con `need_api_key: true` y abre el modal sola.
+
+### 7.4 Coste
 
 Cada entrega supone **una llamada** al modelo con, aproximadamente, la consigna (variable) + la rúbrica + el texto de la entrega (hasta 30 000 caracteres, unos 8 000 tokens). Con `deepseek-v4-flash`, corregir un curso de 30 estudiantes cuesta céntimos.
 
@@ -561,6 +618,21 @@ Cualquier otro formato —el número de cédula con el que suelen ingresar los e
 
 El control vive en `PATRON_DOCENTE` (`app.py`) y es **la única puerta de entrada**: la interfaz solo lo anuncia, no lo decide.
 
+### Qué se guarda y qué no
+
+| Secreto | ¿Se guarda? | Cómo |
+|---|---|---|
+| Clave de API del modelo | ✅ Sí, para no volver a escribirla (las de DeepSeek solo se ven una vez) | **Cifrada** (Fernet) en `webapp/secretos.db`, permisos `600` |
+| Contraseña del Aula Evirtual | ❌ Nunca | Solo se usa en memoria, para pedir el token |
+| Token de Moodle | ⚠️ Solo en la cookie de sesión | Firmada, `HttpOnly` y de vida corta |
+| Clave maestra (`SECRETOS_KEY`) | ✅ En el `.env` | **Fuera** de la base de datos: es lo que hace útil el cifrado |
+
+**Por qué la clave de API se cifra y no se hashea.** `bcrypt` —y cualquier hash— es de un solo sentido: sirve para *verificar* un secreto, no para *reutilizarlo*. La clave de API tiene que **reenviarse tal cual** al proveedor en cada llamada (`Authorization: Bearer …`), así que guardar su hash la volvería inutilizable: habría que teclearla en cada calificación y la persistencia no aportaría nada. Para un secreto que hay que reutilizar solo caben dos opciones honestas: **no guardarlo** (lo que se hace con la contraseña de Moodle) o **guardarlo cifrado** con cifrado reversible (lo que se hace con la clave de API).
+
+Se eligió persistir la clave de API —y no la contraseña de Moodle— porque el daño de cada una es muy distinto: perder una clave de DeepSeek se resuelve generando otra, mientras que la contraseña institucional da acceso a todo el aula y suele reutilizarse en otros servicios.
+
+> **Compromiso aceptado y a sabiendas:** la cookie de sesión de Flask va **firmada pero no cifrada**, así que contiene el token de Moodle en claro (visible en las herramientas de desarrollo del navegador). Se acepta porque es un token de sesión revocable y de vida corta, y porque la cookie es `HttpOnly` (el JavaScript de la página no puede leerla). Por ese mismo motivo **ningún otro secreto** —ni la clave de API ni la contraseña— pasa por ahí.
+
 ### Superficie de exposición
 
 Por defecto la app escucha en `0.0.0.0` para permitir el acceso desde el aula. **No tiene HTTPS ni límite de intentos de login**: está pensada para una red local de confianza. Para exponerla a internet harían falta, como mínimo, un proxy inverso con TLS y autenticación adicional.
@@ -581,17 +653,19 @@ Por defecto la app escucha en `0.0.0.0` para permitir el acceso desde el aula. *
 ├── README.md                                · Guía de instalación y uso
 ├── DOCUMENTACION.md                         · Este documento
 └── webapp/
-    ├── app.py                   644 líneas  · Backend Flask: endpoints, trabajos, rúbricas
-    ├── grader.py                467 líneas  · Motor: extracción de texto + LLM + notas
+    ├── app.py                   764 líneas  · Backend Flask: endpoints, trabajos, rúbricas
+    ├── grader.py                485 líneas  · Motor: extracción de texto + LLM + notas
+    ├── secretos.py              165 líneas  · Almacén cifrado de las claves de API
+    ├── secretos.db                          · Claves cifradas ⚠️ NO se versiona
     ├── run.sh                               · Lanzador Linux/macOS
     ├── run.bat                              · Lanzador Windows
-    ├── requirements.txt                     · flask · requests · pymupdf · python-docx · openpyxl
+    ├── requirements.txt                     · flask · requests · pymupdf · python-docx · openpyxl · cryptography
     ├── SETUP_WINDOWS.md                     · Guía detallada para Windows
     ├── README.md                            · Nota sobre esta carpeta
     ├── rubrics/                             · Rúbricas en JSON
-    ├── static/app.js            787 líneas  · Lógica de la interfaz
-    ├── static/style.css         324 líneas  · Estilos
-    ├── templates/index.html     173 líneas  · Estructura de la interfaz
+    ├── static/app.js            886 líneas  · Lógica de la interfaz
+    ├── static/style.css         339 líneas  · Estilos
+    ├── templates/index.html     231 líneas  · Estructura de la interfaz
     ├── cache/                               · Entregas descargadas ⚠️ NO se versiona
     └── venv/                                · Entorno virtual ⚠️ NO se versiona
 ```
@@ -615,8 +689,9 @@ Todo lo demás es **biblioteca estándar de Python** (`urllib`, `threading`, `js
 ### Puesta en marcha
 
 ```bash
-cp .env.example .env    # rellenar DEEPSEEK_API_KEY, MOODLE_SITE, SECRET_KEY
+cp .env.example .env    # rellenar MOODLE_SITE y SECRET_KEY
 cd webapp && ./run.sh   # Linux/macOS   (Windows: run.bat)
+# al entrar en la web, cada docente configura ahí su clave de API
 ```
 
 El lanzador verifica la versión de Python, crea el entorno virtual la primera vez, avisa si falta el `.env` y muestra la dirección de red local.
@@ -625,11 +700,11 @@ El lanzador verifica la versión de Python, crea el entorno virtual la primera v
 
 | Variable | Por defecto | Función |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | — | Clave del modelo (obligatoria) |
 | `DEEPSEEK_BASE_URL` | `https://api.deepseek.com/v1` | Permite usar cualquier proveedor compatible con la API de OpenAI |
 | `GRADER_MODEL` | `deepseek-v4-flash` | Modelo que califica |
 | `MOODLE_SITE` | — | URL del Moodle (sustituye a `config.json`) |
 | `SECRET_KEY` | — | Firma de las cookies de sesión |
+| `SECRETOS_KEY` | se genera sola | Clave maestra que descifra las claves de API guardadas. **No la borres**: sin ella, las claves guardadas dejan de poder leerse |
 | `HOST` | `0.0.0.0` | `127.0.0.1` para restringir a la máquina local |
 | `PORT` | `5050` | Puerto del servidor |
 

@@ -7,6 +7,7 @@ sys.path.insert(0, HERE)
 from flask import Flask, jsonify, request, send_from_directory, send_file, session  # noqa: E402
 import grader  # noqa: E402
 import api  # noqa: E402
+import secretos  # noqa: E402
 
 api.load_env()  # carga las credenciales del .env antes de leer cualquier configuración
 
@@ -24,6 +25,10 @@ def _load_secret_key():
     key = os.urandom(32).hex()
     with open(path, "w") as f:
         f.write(key)
+    try:
+        os.chmod(path, 0o600)
+    except OSError:
+        pass
     return key
 
 
@@ -34,6 +39,39 @@ CACHE_DIR = os.path.join(HERE, "cache")
 
 JOBS = {}
 JOBS_LOCK = threading.Lock()
+
+# Clave de API del modelo, por docente. Vive SOLO en la memoria del servidor:
+# nunca se escribe en disco ni viaja dentro de la cookie de sesión.
+LLM_KEYS = {}
+LLM_KEYS_LOCK = threading.Lock()
+
+
+def _llm_key(userid=None):
+    """Clave de API del docente conectado (o de otro userid si se indica).
+
+    Se busca primero en memoria y, si no está —por ejemplo tras reiniciar el
+    servidor—, en el almacén cifrado de disco; al encontrarla queda cacheada.
+    """
+    if userid is None:
+        userid = session.get("userid")
+    with LLM_KEYS_LOCK:
+        clave = LLM_KEYS.get(userid)
+    if clave:
+        return clave
+    clave = secretos.obtener(userid)        # se descifra desde secretos.db
+    if clave:
+        with LLM_KEYS_LOCK:
+            LLM_KEYS[userid] = clave
+    return clave
+
+
+def _mask(clave):
+    """Muestra solo las puntas de una clave. Nunca se devuelve entera al navegador."""
+    if not clave:
+        return ""
+    if len(clave) <= 12:
+        return "•" * len(clave)
+    return f"{clave[:7]}…{clave[-4:]}"
 
 
 # ───────────────────────── autenticación ─────────────────────────
@@ -126,7 +164,68 @@ def login():
 
 @app.route("/api/logout", methods=["POST"])
 def logout():
+    with LLM_KEYS_LOCK:
+        # Solo se olvida la copia en memoria; la guardada cifrada se conserva
+        LLM_KEYS.pop(session.get("userid"), None)
     session.clear()
+    return jsonify({"ok": True})
+
+
+# ─────────────── clave de API del modelo (por docente) ───────────────
+
+@app.route("/api/apikey", methods=["GET"])
+def apikey_status():
+    uid = session.get("userid")
+    clave = _llm_key()
+    return jsonify({
+        "configured": bool(clave),
+        "hint": _mask(clave),
+        "remembered": secretos.hay(uid),     # ¿está guardada en disco?
+    })
+
+
+@app.route("/api/apikey", methods=["POST"])
+def apikey_save():
+    clave = ((request.get_json(silent=True) or {}).get("api_key") or "").strip()
+    if not clave:
+        return jsonify({"error": "Escribe tu clave de API"}), 400
+    if not clave.startswith("sk-") or len(clave) < 20:
+        return jsonify({"error": "Esa no parece una clave válida: deben empezar por «sk-»"}), 400
+
+    # Se comprueba contra el proveedor antes de darla por buena.
+    verificada, detalle = grader.probar_clave(clave)
+
+    with LLM_KEYS_LOCK:
+        LLM_KEYS[session["userid"]] = clave
+    # Y se guarda cifrada para que sobreviva a los reinicios del servidor.
+    guardada, error_guardado = False, ""
+    try:
+        secretos.guardar(session["userid"], session.get("fullname", ""), clave)
+        guardada = True
+    except Exception as e:
+        error_guardado = str(e)
+
+    avisos = []
+    if not verificada:
+        avisos.append(f"El proveedor no la aceptó: {detalle}")
+    if not guardada:
+        avisos.append(f"No se pudo guardar en disco: {error_guardado}")
+
+    return jsonify({
+        "ok": True,
+        "hint": _mask(clave),
+        "verified": verificada,
+        "remembered": guardada,
+        "warning": " · ".join(avisos),
+    })
+
+
+@app.route("/api/apikey", methods=["DELETE"])
+def apikey_delete():
+    uid = session.get("userid")
+    with LLM_KEYS_LOCK:
+        LLM_KEYS.pop(uid, None)
+    secretos.borrar(uid)                     # y también la copia guardada
     return jsonify({"ok": True})
 
 
@@ -579,6 +678,14 @@ def preview(aid):
     if not detail:
         return jsonify({"error": "tarea no encontrada"}), 404
 
+    # Cada docente usa su propia clave de API: el consumo se factura a su cuenta.
+    clave = _llm_key()
+    if not clave:
+        return jsonify({
+            "error": "Configura tu clave de API de DeepSeek antes de calificar.",
+            "need_api_key": True,
+        }), 400
+
     # Capturar credenciales para el hilo de calificación (no hereda el thread-local).
     token = session["token"]
     site = site_url()
@@ -603,7 +710,7 @@ def preview(aid):
             consigna = grader.build_consigna(aid, detail["intro"], detail.get("attachments"))
             results = grader.grade_submissions(
                 aid, consigna, rubric, float(detail["grade"]),
-                progress_cb=cb, only_userids=only)
+                progress_cb=cb, only_userids=only, api_key=clave)
             with JOBS_LOCK:
                 JOBS[job_id]["results"] = results
                 JOBS[job_id]["status"] = "done"

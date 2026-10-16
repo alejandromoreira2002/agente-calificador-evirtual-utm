@@ -46,10 +46,14 @@ def _post_con_limite(url, payload, headers, segundos):
     return caja["r"]
 
 
-def llm_json(messages, temperature=0.2, max_retries=None):
+def llm_json(messages, temperature=0.2, max_retries=None, api_key=None, timeout=None):
     load_env()
     base = os.environ.get("DEEPSEEK_BASE_URL", "https://api.deepseek.com/v1").rstrip("/")
-    key = os.environ.get("DEEPSEEK_API_KEY", "")
+    # La clave la aporta siempre quien califica (cada docente la suya): no hay
+    # ninguna clave de servidor de la que tirar.
+    clave = (api_key or "").strip()
+    if not clave:
+        raise RuntimeError("Falta la clave de API: configúrala en «🔑 Mi API key»")
     model = os.environ.get("GRADER_MODEL", "deepseek-v4-flash")
     payload = {
         "model": model,
@@ -59,12 +63,13 @@ def llm_json(messages, temperature=0.2, max_retries=None):
         "thinking": {"type": "disabled"},  # DeepSeek V4: sin razonamiento, respuesta directa
         "max_tokens": 4000,                # acota la salida
     }
-    headers = {"Authorization": f"Bearer {key}", "Content-Type": "application/json"}
+    headers = {"Authorization": f"Bearer {clave}", "Content-Type": "application/json"}
     intentos = max_retries or LLM_INTENTOS
     last = None
     for attempt in range(intentos):
         try:
-            r = _post_con_limite(base + "/chat/completions", payload, headers, LLM_TIMEOUT)
+            r = _post_con_limite(base + "/chat/completions", payload, headers,
+                                 timeout or LLM_TIMEOUT)
             if r.status_code in (429, 500, 502, 503):
                 last = RuntimeError("HTTP %s" % r.status_code)
                 time.sleep(min(2 ** attempt, 8))
@@ -81,6 +86,18 @@ def llm_json(messages, temperature=0.2, max_retries=None):
             last = e
             time.sleep(min(2 ** attempt, 8))
     raise RuntimeError(f"El agente no respondió tras {intentos} intentos ({last})")
+
+
+def probar_clave(api_key, segundos=20):
+    """Comprueba que una clave de API responde. Devuelve (ok, mensaje_de_error)."""
+    try:
+        llm_json(
+            [{"role": "user", "content": 'Devuelve un objeto json con la clave "ok" en true'}],
+            max_retries=1, api_key=api_key, timeout=segundos,
+        )
+        return True, ""
+    except Exception as e:
+        return False, str(e)[:200]
 
 
 def _parse_json(text):
@@ -212,7 +229,7 @@ def detalle_criterios(criteria, grade, max_grade):
     return "\n".join(lineas)
 
 
-def grade_one(consigna, rubric, max_grade, text, student_name=""):
+def grade_one(consigna, rubric, max_grade, text, student_name="", api_key=None):
     """Devuelve dict con criterios puntuados, nota escalada, justificación y feedback.
 
     Dos modos:
@@ -257,7 +274,7 @@ def grade_one(consigna, rubric, max_grade, text, student_name=""):
             "Evalúa la entrega y devuelve el JSON con el nivel elegido en cada criterio."
         )
         data = llm_json([{"role": "system", "content": system},
-                         {"role": "user", "content": user}])
+                         {"role": "user", "content": user}], api_key=api_key)
 
         lvl_map = {l["name"].strip().lower(): l for l in levels}
         rub_by_name = {c["name"].strip().lower(): c for c in rubric["criteria"]}
@@ -306,7 +323,7 @@ def grade_one(consigna, rubric, max_grade, text, student_name=""):
             "Evalúa la entrega contra la consigna y la rúbrica y devuelve el JSON."
         )
         data = llm_json([{"role": "system", "content": system},
-                         {"role": "user", "content": user}])
+                         {"role": "user", "content": user}], api_key=api_key)
 
         criteria = data.get("criteria", [])
         rub_max = {c["name"].strip().lower(): c["max_points"] for c in rubric["criteria"]}
@@ -366,7 +383,8 @@ def build_consigna(aid, intro, attachments):
     return "\n\n".join(p for p in parts if p.strip())
 
 
-def grade_submissions(assignid, consigna, rubric, max_grade, progress_cb=None, only_userids=None):
+def grade_submissions(assignid, consigna, rubric, max_grade, progress_cb=None,
+                      only_userids=None, api_key=None):
     """Descarga y califica las entregas de una tarea (solo las de `only_userids` si se indica)."""
     subs = api.get_submissions(assignid)
     if isinstance(subs, dict):
@@ -416,7 +434,7 @@ def grade_submissions(assignid, consigna, rubric, max_grade, progress_cb=None, o
         if not full.strip():
             full = "(sin contenido legible)"
         try:
-            g = grade_one(consigna, rubric, max_grade, full, name)
+            g = grade_one(consigna, rubric, max_grade, full, name, api_key=api_key)
             status = "ok"
         except Exception as e:
             g = {"grade": None, "summary": f"Error de calificación: {e}",
@@ -443,7 +461,7 @@ def grade_submissions(assignid, consigna, rubric, max_grade, progress_cb=None, o
             progress_cb(done, total, "reintentando: " + name)
         time.sleep(3)
         try:
-            g = grade_one(consigna, rubric, max_grade, full, name)
+            g = grade_one(consigna, rubric, max_grade, full, name, api_key=api_key)
             item.update(g)
             item["status"] = "ok"
         except Exception as e:

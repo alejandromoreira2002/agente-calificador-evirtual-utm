@@ -16,6 +16,7 @@ Pensada para docentes que **no tienen acceso de administrador** al Moodle instit
 - Badge azul de avance por tarea (`calificados / entregas`).
 
 **Calificación con IA**
+- **Cada docente usa su propia clave de API**: el consumo del modelo se factura a su cuenta, no a la del servidor. Se verifica al guardarla, se guarda **cifrada** y se recuerda entre reinicios.
 - **Selección de estudiantes**: marca individualmente, en bloque o a todos. No siempre se califica a todo el curso.
 - Descarga automática de las entregas y **extracción de texto**: PDF, DOCX, TXT, código fuente, ZIP y RAR.
 - La **consigna enviada al agente** incluye la descripción de la tarea **y los archivos adjuntos** que subió el docente (guías, enunciados).
@@ -66,7 +67,7 @@ git clone https://github.com/TU_USUARIO/calificador-moodle.git
 cd calificador-moodle
 
 cp .env.example .env
-nano .env            # rellena DEEPSEEK_API_KEY, MOODLE_SITE y SECRET_KEY
+nano .env            # rellena MOODLE_SITE y SECRET_KEY (la clave de IA se pone luego en la web)
 
 cd webapp
 chmod +x run.sh
@@ -147,7 +148,7 @@ cd calificador-moodle
 
 # 3. Credenciales
 cp .env.example .env
-open -e .env                 # rellena DEEPSEEK_API_KEY, MOODLE_SITE y SECRET_KEY
+open -e .env                 # rellena MOODLE_SITE y SECRET_KEY (la clave de IA se pone luego en la web)
 
 # 4. Arrancar
 cd webapp
@@ -208,13 +209,18 @@ cp .env.example .env
 
 | Variable | Obligatoria | Descripción |
 |---|---|---|
-| `DEEPSEEK_API_KEY` | ✅ | Clave del modelo que califica |
 | `DEEPSEEK_BASE_URL` | — | Endpoint del proveedor (por defecto `https://api.deepseek.com/v1`) |
 | `GRADER_MODEL` | — | Modelo a usar (por defecto `deepseek-v4-flash`) |
 | `MOODLE_SITE` | ✅ | URL del Moodle, p. ej. `https://moodle.miuniversidad.edu` |
 | `SECRET_KEY` | ✅ | Clave de firma de las sesiones web. Genera una con `python3 -c "import secrets; print(secrets.token_hex(32))"` |
 | `HOST` | — | `0.0.0.0` para acceder desde la red local (por defecto), `127.0.0.1` solo local |
 | `PORT` | — | Puerto del servidor (por defecto `5050`) |
+
+> 🔑 **Cada docente usa su propia clave de DeepSeek.** Al entrar por primera vez, la web la pide y la verifica contra el proveedor. El consumo se factura a la cuenta de cada uno, no a la del dueño del servidor.
+>
+> La clave se guarda **cifrada** en `webapp/secretos.db` (permisos `600`), así que **se recuerda aunque se reinicie el servidor** y no hay que volver a escribirla. La clave maestra que la descifra vive **fuera** de esa base de datos, en el propio `.env` (`SECRETOS_KEY`, se genera sola la primera vez). Nunca se devuelve al navegador: solo sus últimas cifras, p. ej. `sk-2cb1…3761`.
+>
+> ⚠️ **No borres `SECRETOS_KEY` del `.env`**: sin ella las claves guardadas dejan de poder descifrarse (no se corrompe nada, pero habrá que introducirlas otra vez).
 
 > El **token de Moodle** no se guarda en disco: se obtiene al iniciar sesión y viaja dentro de la cookie de sesión firmada. Al cerrar sesión desaparece.
 
@@ -328,6 +334,8 @@ Si vas a publicar este proyecto, revisa tu `.env` y tu historial de Git antes de
 └── webapp/
     ├── app.py              # Backend Flask (endpoints, trabajos de calificación)
     ├── grader.py           # Motor de calificación (extracción de texto + LLM)
+    ├── secretos.py         # Almacén cifrado de las claves de API
+    ├── secretos.db         # Claves cifradas ⚠️ no se sube
     ├── run.sh              # Lanzador para Linux y macOS
     ├── run.bat             # Lanzador para Windows
     ├── requirements.txt

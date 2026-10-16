@@ -55,6 +55,10 @@
       </div>
     </div>
     <div class="user">
+      <button class="apikey-btn" id="apikey-btn" type="button"
+              title="Clave de API con la que se califica">
+        🔑 <span id="apikey-label">Sin API key</span>
+      </button>
       <span id="user-label">…</span>
       <button class="logout" id="logout-btn" type="button">Salir</button>
     </div>
@@ -164,6 +168,57 @@
             <button class="primary" id="save-rubric-btn" type="button">Guardar rúbrica</button>
             <button class="ghost" id="cancel-rubric-btn" type="button">Cancelar</button>
           </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Modal de la clave de API del modelo -->
+  <div id="apikey-modal" class="modal-overlay hidden">
+    <div class="modal modal-sm">
+      <div class="modal-head">
+        <h3>🔑 Mi clave de API</h3>
+        <button class="modal-close" id="apikey-close" type="button">✕</button>
+      </div>
+      <div class="modal-body">
+        <p class="muted small">
+          La calificación se ejecuta con <strong>tu propia cuenta</strong> del proveedor:
+          el consumo se factura a ti y no al dueño del servidor.
+        </p>
+
+        <div class="field">
+          <label for="apikey-input">Clave de DeepSeek</label>
+          <div class="pass-wrap">
+            <input id="apikey-input" type="password" placeholder="sk-…" autocomplete="off" spellcheck="false">
+            <button type="button" id="apikey-toggle" class="pass-toggle" aria-pressed="false"
+                    aria-label="Mostrar clave" title="Mostrar clave">
+              <svg class="icon-eye" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M1 12s4-8 11-8 11 8 11 8-4 8-11 8-11-8-11-8z"/>
+                <circle cx="12" cy="12" r="3"/>
+              </svg>
+              <svg class="icon-eye-off hidden" viewBox="0 0 24 24" width="18" height="18" aria-hidden="true">
+                <path d="M17.94 17.94A10.07 10.07 0 0 1 12 20c-7 0-11-8-11-8a18.45 18.45 0 0 1 5.06-5.94"/>
+                <path d="M9.9 4.24A9.12 9.12 0 0 1 12 4c7 0 11 8 11 8a18.5 18.5 0 0 1-2.16 3.19"/>
+                <path d="M14.12 14.12a3 3 0 1 1-4.24-4.24"/>
+                <line x1="1" y1="1" x2="23" y2="23"/>
+              </svg>
+            </button>
+          </div>
+        </div>
+
+        <p class="small" id="apikey-status"></p>
+
+        <p class="muted small">
+          🔒 Se guarda <strong>cifrada</strong> en el servidor, así que <strong>se recuerda
+          aunque se reinicie</strong> y no tendrás que volver a escribirla. La clave maestra
+          que la descifra vive fuera de la base de datos. Nunca se devuelve al navegador:
+          solo sus últimas cifras. Consigue una en
+          <a href="https://platform.deepseek.com/api_keys" target="_blank" rel="noopener">platform.deepseek.com</a>.
+        </p>
+
+        <div class="form-actions">
+          <button class="primary" id="apikey-save" type="button">Guardar y verificar</button>
+          <button class="ghost" id="apikey-delete" type="button">Eliminar</button>
         </div>
       </div>
     </div>

@@ -16,16 +16,15 @@ def _config_path():
 
 
 def load_env():
-    """Carga las credenciales desde un archivo .env si aún no están en el entorno.
+    """Carga las credenciales desde el .env del proyecto si no están ya en el entorno.
 
-    Busca, en orden: .env junto a este archivo (raíz del proyecto), .env dentro de
-    webapp/ y ~/.hermes/.env (ubicación estándar de Hermes). No sobreescribe las
-    variables que ya vengan definidas en el entorno.
+    Busca, en orden: `.env` junto a este archivo (raíz del proyecto) y `.env` dentro
+    de `webapp/`. No lee nada de fuera de la carpeta del proyecto, ni sobreescribe
+    las variables que ya vengan definidas en el entorno.
     """
     candidatos = [
         os.path.join(_HERE, ".env"),
         os.path.join(_HERE, "webapp", ".env"),
-        os.path.expanduser("~/.hermes/.env"),
     ]
     for ruta in candidatos:
         if not os.path.exists(ruta):

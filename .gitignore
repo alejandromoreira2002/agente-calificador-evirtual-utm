@@ -4,6 +4,7 @@
 !.env.example
 secret_key
 webapp/secret_key
+webapp/secretos.db
 
 # ─────────── Datos de estudiantes (privacidad) ───────────
 submissions/
